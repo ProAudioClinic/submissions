@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Submission</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(120deg, #f6d365, #fda085);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    form {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 600px;
+    }
+    h1 {
+      text-align: center;
+      color: #0056b3;
+      margin-bottom: 20px;
+    }
+    label {
+      font-weight: bold;
+      margin: 10px 0 5px;
+      display: block;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      background: linear-gradient(to right, #007bff, #0056b3);
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: linear-gradient(to right, #0056b3, #003c80);
+    }
+    #dropZone {
+      border: 2px dashed #007bff;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 15px;
+      background: #f0f8ff;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #dropZone.dragover {
+      background: #cce7ff;
+    }
+    .hidden {
+      display: none;
+    }
+    #successMessage {
+      color: green;
+      font-weight: bold;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <form>
+    <h1>Rename Your File Before Submitting</h1>
+
+    <!-- Submission Options -->
+    <label for="submissionType">Select Submission Type:</label>
+    <select id="submissionType" onchange="toggleSubmissionOptions()">
+      <option value="none">None</option>
+      <option value="quotes">Get Quotes</option>
+      <option value="experience">Share Experience</option>
+    </select>
+
+    <!-- Dynamic Section for Get Quotes -->
+    <div id="quotesSection" class="hidden">
+      <label for="buyBackQuestion">Are you interested in our Buy Back program?</label>
+      <select id="buyBackQuestion">
+        <option value="No">No</option>
+        <option value="Yes">Yes</option>
+      </select>
+    </div>
+
+    <!-- Drag-and-Drop Zone -->
+    <div id="dropZone">Drag and drop your files here or <span id="browseLink" style="color: #007bff; cursor: pointer;">browse</span></div>
+    <input type="file" id="fileInput" class="hidden" multiple>
+
+    <!-- User Details -->
+    <label for="email">Email:</label>
+    <input type="email" id="email" placeholder="Enter your email" required>
+    <label for="productName">Product Name:</label>
+    <input type="text" id="productName" placeholder="Enter the product name" required>
+
+    <!-- Rename File -->
+    <label for="folderName">File Name:</label>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <input type="text" id="folderName" placeholder="File name will be generated automatically" readonly>
+      <button type="button" id="renameButton">Rename File</button>
+    </div>
+
+    <!-- Success Message -->
+    <p id="successMessage"></p>
+
+    <button type="button" onclick="uploadFileOrZip()">Upload to Dropbox</button>
+  </form>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropZone = document.getElementById('dropZone');
+      const fileInput = document.getElementById('fileInput');
+      const browseLink = document.getElementById('browseLink');
+      const submissionType = document.getElementById('submissionType');
+      const quotesSection = document.getElementById('quotesSection');
+      const folderNameInput = document.getElementById('folderName');
+      const emailInput = document.getElementById('email');
+      const productNameInput = document.getElementById('productName');
+      const renameButton = document.getElementById('renameButton');
+      const successMessage = document.getElementById('successMessage');
+
+      let files = [];
+      let zipBlob = null;
+      let fileDialogOpen = false; // Prevent multiple dialogs
+
+      // Toggle Quotes Section
+      window.toggleSubmissionOptions = function () {
+        quotesSection.style.display = submissionType.value === 'quotes' ? 'block' : 'none';
+      };
+
+      // File Browse Trigger
+      function triggerFileInput() {
+        if (fileDialogOpen) return;
+        fileDialogOpen = true;
+        fileInput.click();
+        setTimeout(() => (fileDialogOpen = false), 500);
+      }
+
+      browseLink.addEventListener('click', triggerFileInput);
+      dropZone.addEventListener('click', triggerFileInput);
+
+      // Drag-and-Drop Handlers
+      dropZone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+
+      dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+      dropZone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dropZone.classList.remove('dragover');
+        const droppedFiles = Array.from(event.dataTransfer.files);
+        addFiles(droppedFiles);
+      });
+
+      fileInput.addEventListener('change', (event) => {
+        const selectedFiles = Array.from(event.target.files);
+        addFiles(selectedFiles);
+      });
+
+      function addFiles(newFiles) {
+        files = [...files, ...newFiles];
+        successMessage.textContent = `${files.length} file(s) ready for upload.`;
+        successMessage.style.display = 'block';
+      }
+
+      renameButton.addEventListener('click', () => {
+        updateFileName();
+        successMessage.textContent = `File name updated to: ${folderNameInput.value}`;
+        successMessage.style.color = 'green';
+        successMessage.style.display = 'block';
+      });
+
+      function updateFileName() {
+        const email = emailInput.value.trim().replace(/\s+/g, '_').replace(/@|\./g, '_');
+        const productName = productNameInput.value.trim().replace(/\s+/g, '_');
+        folderNameInput.value = `${email}_${productName}`;
+      }
+
+      emailInput.addEventListener('input', updateFileName);
+      productNameInput.addEventListener('input', updateFileName);
+
+      // Upload to Dropbox
+      window.uploadFileOrZip = async function () {
+        if (!files.length) {
+          successMessage.style.color = 'red';
+          successMessage.textContent = 'No files selected for upload.';
+          successMessage.style.display = 'block';
+          return;
+        }
+
+        const fileName = folderNameInput.value || 'MyFile';
+        const dropboxLinks = {
+          quotes: 'https://www.dropbox.com/request/XYUVnZCvByyTvHrBl72T',
+          buyBack: 'https://www.dropbox.com/request/4sJU1GV1ujNccLk5iGf6',
+          experience: 'https://www.dropbox.com/request/t3ND8WDYnz6sKCfvsfIz',
+        };
+
+        let uploadLink;
+        if (submissionType.value === 'quotes' && document.getElementById('buyBackQuestion')?.value === 'Yes') {
+          uploadLink = dropboxLinks.buyBack;
+        } else {
+          uploadLink = dropboxLinks[submissionType.value];
+        }
+
+        if (files.length === 1) {
+          window.open(uploadLink, '_blank');
+        } else {
+          const zip = new JSZip();
+          files.forEach((file) => zip.file(file.name, file));
+          zipBlob = await zip.generateAsync({ type: 'blob' });
+          const downloadLink = document.createElement('a');
+          downloadLink.href = URL.createObjectURL(zipBlob);
+          downloadLink.download = `${fileName}.zip`;
+          downloadLink.click();
+          window.open(uploadLink, '_blank');
+        }
+
+        successMessage.style.color = 'green';
+        successMessage.textContent = 'Files uploaded successfully!';
+        successMessage.style.display = 'block';
+      };
+    });
+  </script>
+</body>
+</html>
